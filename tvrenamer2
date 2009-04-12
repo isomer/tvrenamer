@@ -1,0 +1,423 @@
+#!/usr/bin/python
+# coding=latin1
+# TV Renamer v2.10
+# (C) Copyright 2007,2009 Perry Lorier
+#
+# Latest version can be downloaded from
+#  http://github.com/isomer/tvrenamer/master
+#
+# 2.1
+#  * Fixed truncated show names
+#  * Added support for --title argument
+# 2.2 (2007-02-05)
+#  * Add support for --name for shows that have different UK/US names
+# 2.3 (2007-06-13)
+#  * Fix episode with "1x01" in them that aren't prefixed with a space
+# 2.4 (2007-07-01)
+#  * Consider a variety of formats when looking up episode names, in
+#    particular ones that are "reimagined" series.
+#  * More liberal parsing of the epguides page
+# 2.5 (2008-01-24)
+#  * Add new patterns
+# 2.6 (2008-06-16)
+#  * Cleaned up patterns to be more strict about matching.
+# 2.7 (2008-09-29)
+#  * Made code nicer for parsing the output
+# 2.8 (2008-10-05)
+#  * Deal with e7-'s naming conventions.  Sigh
+# 2.9 (2008-11-04)
+#  * support "ffn" prefix for people that like dotted names.
+# 2.10 (2008-12-18)
+#  * Deal with epguides latin1 encodings.
+import urllib
+import sys
+import re
+import os
+import getopt
+import glob
+import pickle
+import htmlentitydefs
+
+# Load the tvrenamer cache
+def load_cache():
+	fname=os.path.expanduser("~/.tvrenamercache")
+	try:
+		return pickle.load(open(fname,"r"))
+	except:
+		return {}
+	
+def save_cache(series_info):
+	fname=os.path.expanduser("~/.tvrenamercache")
+	try:
+		pickle.dump(series_info,open(fname,"w"))
+	except:
+		raise
+		pass
+
+series_loaded_this_session=[]
+noact=0
+debug=0
+
+expando="%(fntitle)s - %(season)ix%(ep)02i - %(fnname)s.%(ext)s"
+
+patterns=[
+	# seasonseasonEepisodeepisode
+	r'(?:e7-)?(.*?)[^A-Za-z0-9] *-? *[Ss]? *([0-9][0-9])[Eex]([0-9]+).*\.([^.]+)$', 
+	# seasonEepisodeepisode
+	r'(.*?)[^A-Za-z0-9] *-? *[Ss]? *([0-9])[Eex]([0-9]+).*\.([^.]+)$',
+	# seasonseasonepisodeepisode
+	r'(.*?)[^A-Za-z0-9] *-? *[Ss]? *([0-9][0-9])([0-9][0-9]).*\.([^.]+)$',
+	# seasonepisodeepisode
+	r'(.*?)[^A-Za-z0-9] *-? *[Ss]? *([0-9])([0-9][0-9]).*\.([^.]+)$',
+	# seasonseason.episodeepisode
+	r'(.*?)[^A-Za-z0-9] *-? *[Ss]? *([0-9][0-9])\.([0-9][0-9]).*\.([^.]+)$',
+	# season.episodeepisode
+	r'(.*?)[^A-Za-z0-9] *-? *[Ss]? *([0-9])\.([0-9][0-9]).*\.([^.]+)$',
+	# Sseasonseason episodeepisode
+	r'(.*?)[^A-Za-z0-9] *-? *[Ss]([0-9]+) ?[Ee]([0-9]+).*\.([^.]+)$',
+	# Sseasonseason.Eepisodeepisode
+	r'(.*?)[^A-Za-z0-9] *-? *[Ss]([0-9]+).[Ee]([0-9]+).*\.([^.]+)$',
+	# Sseasonseason-episodeepisode
+	r'(.*?)[^A-Za-z0-9] *-? *[Ss]([0-9]+)-([0-9]+).*\.([^.]+)$',
+	# seasonseason-episodeepisode
+	r'(.*?)[^A-Za-z0-9] *-? *([0-9]+)-([0-9]+).*\.([^.]+)$',
+]
+
+def unhtmlspecialchars(txt):
+    "Remove &entities; from HTML"
+    try:
+	    txt = txt.decode("utf8") # turn into a unicode str
+    except UnicodeDecodeError, e:
+    	txt = txt.decode("latin1","replace") # try again, ignoring errors
+    def get_entity_char(match):
+        """returns a unicode encoded char string for a given html entity
+        (eg '&#167;' -> u'§', '&eacute;' -> u'é ')"""
+	entity = match.group(1)
+        if not entity.startswith("&#"): 
+            # it's a named entity
+            try:
+                entity = htmlentitydefs.entitydefs[entity[1:-1]].decode("latin1")
+            except:
+                # someone has used a non-standard entity name, or made a typo?
+                pass
+            # we now either have a unicode char, or another html entity if
+            # it was a char not in latin1...   
+        if entity.startswith("&#"):  
+            # Numeric Character Reference
+            code = entity[2:-1] # ignore leading &# and trailing ;
+            if code[0] in ('x','X'): # hex
+                return unichr(int(code[1:], 16))
+            return unichr(int(code))
+        return entity
+
+    ret = re.sub("(&#?[A-Za-z0-9]+;)", get_entity_char, txt)
+    return ret.encode('utf8')
+
+def fetchpage(title):
+	url='http://epguides.com/%s/' % title
+
+	if debug:
+		print "DEBUG: Fetching %s" % `url`
+
+	epdisplaytitle = ""
+	a=urllib.urlopen(url)
+	f=[x.split('\r') for x in a.readlines()]
+	ff=reduce(lambda a,b:a+b,f)
+	flag=1
+	data={}
+	suggest=None
+	for i in ff:
+		i=i.strip()
+		a=re.match(r'.*<meta http-equiv="refresh" content="[0-9]+; url=http://epguides.com/(.*)">.*',i,re.IGNORECASE)
+		if a:
+			suggest=a.groups()[0]
+		if "<pre>" in i:
+			flag=1
+		if "</pre>" in i:
+			flag=0
+		if i.startswith("<title>"):
+			flag=2
+			i=i[len("<title>"):]
+		newflag=flag
+		if i.endswith("</title>"):
+			newflag=0
+			i=i[:-(len("<title>")+1)]
+		if flag==1:
+			a=re.match(r'(?:.*\.|<li>) *([0-9]+|S)- *([0-9]+).*">(.*)</a>',i)
+			# Sometimes they aren't linked
+			if not a:
+				a=re.match(r'(?:.*\.|<li>) *([0-9]+|S)- *([0-9]+).*[0-9][0-9]  (.*)',i)
+			if a:
+				if a.groups()[0]!="S":
+					season=int(a.groups()[0])
+				else:
+					season=a.groups()[0]
+				ep=int(a.groups()[1])
+				if not data.has_key(season):
+					data[season]={}
+				data[season][ep]=unhtmlspecialchars(a.groups()[2])
+			else:
+				if debug and i!="":
+					print "DEBUG: Unmatched line",`i`
+		elif flag==2:
+			if i.strip()!='':
+				if re.match(r"^(.*) *\(.*\)",i):
+					i=re.match(r"^(.*) *\(.*\)",i).groups()[0].strip()
+				epdisplaytitle=" ".join([
+					epdisplaytitle,
+					unhtmlspecialchars(i),
+					]).strip()
+		flag=newflag
+	if data=={} and suggest:
+		if debug:
+			print "DEBUG: Redirecting to",`suggest`
+		return fetchpage(suggest)
+	if data=={}:
+		if debug:
+			print "DEBUG: No data found"
+		return None
+	return epdisplaytitle,data
+
+
+def rename(f,t):
+	"Attempt to rename a file, produce an error if it cannot be renamed, or if the destination exists to stderr, but dont raise an exception"
+	if f==t:
+		return
+	print "%s: %s" % (os.path.basename(f),os.path.basename(t))
+	if noact:
+		return
+	if os.access(t,os.F_OK):
+		print >>sys.stderr,"Destination exists"
+		return
+	try:
+		os.rename(f,t)
+	except OSError,e:
+		print e
+
+# A lot of filesystems don't deal well with weird charactors, so strip
+# them out
+def fix_name(fname):
+	"Strip charactors from filenames that cause filesystems issues"
+	for i in "?:*+/\\"+"".join([chr(x) for x in range(32)])+"".join([chr(x) for x in range(128,256)]):
+		fname=fname.replace(i," ")
+	while "  " in fname:
+		fname=fname.replace("  "," ")
+	fname=fname.strip()
+	return fname
+
+def extreme_fix_name(fname):
+	"Strip all non alphanumeric from name, replace ' ' with '.'"
+	fname=re.sub("\+"," plus ",fname)
+	fname=re.sub("&"," and ",fname)
+	fname=re.sub("  +"," ",fname)
+	fname=re.sub("[^A-Za-z0-9 ]","",fname)
+	fname=fname.replace(' ','.')
+	return fname
+
+def parse_filename(fname):
+	"fname -> seriesname,seasonnum,epnum,ext"
+	# remove things that look like dates
+	fname=re.sub(r'[-/]20[0-9]','',fname)
+	fname=re.sub(r'[-/]19[789][0-9]','',fname)
+	# Now match it against known patterns
+	for i in patterns:
+		a=re.match(i,fname)
+		if a: 
+			name,season,episode,ext=a.groups()
+			if debug:
+				print "DEBUG: filename:",`fname`
+				print "DEBUG: pattern:",`i`
+				print "DEBUG: Name:",`name`
+				print "DEBUG: Season:",`season`
+				print "DEBUG: Episode:",`episode`
+				print "DEBUG: Extension:",`ext`
+			if re.match(r"^the[^a-z]",name.lower()):
+				if debug:
+					print "DEBUG: stripping 'the' prefix"
+				name=name[3:]
+			if name.lower().endswith(", the"):
+				if debug:
+					print "DEBUG: stripping ', the' suffix"
+				name=name[:-5]
+			if debug:
+				print "DEBUG: final name:",`name`
+			return (
+				re.sub(r"[^A-Za-z0-9]","",name),
+				int(season),
+				int(episode),
+				ext)
+	# The filename follows no known pattern.
+	return None
+
+# Series patterns
+# Taking a name of a series, try and extrapolate what it might be called
+def series_patterns(name):
+	ret=[]
+	# Try the raw series name
+	ret.append(name)
+	# Dates at the end might indicate that this series has two runs 
+	# from different dates.
+	if re.match(r"^(19[5-9][0-9]|20[0-1][0-9])$",name[-4:]):
+		ret.append(name[:-4]+"_"+name[-4:])
+		ret.append(name[:-4])
+
+	return ret
+
+def process_file(fname,title,outname):
+	f=os.path.realpath(fname)
+	dirn=os.path.dirname(f)
+	fname=os.path.basename(f)
+
+	ret=parse_filename(fname)
+
+	if not ret:
+		print >>sys.stderr,"can't determine episode number:",i
+		return
+
+	name,season,episode,ext = ret
+
+	if title is not None:
+		name=re.sub(r"[^A-Za-z0-9_]","",title)
+
+	# Because of the cache, we might not have the information, so we
+	# may want to run this again if we can't find the information we're
+	# looking for.
+	while 1:
+		# Search to see if we can find something in our cache that
+		# looks like it matches
+		for name2 in series_patterns(name):
+			if debug:
+				print "DEBUG: Considering",`name2`
+			if series_info.has_key(name2) \
+				and series_info[name2] is not None:
+					name=name2
+					break
+		else:
+			for name2 in series_patterns(name):
+				series_info[name2]=fetchpage(name2)
+				series_loaded_this_session.append(name2)
+				if series_info[name2] is not None:
+					name=name2
+
+		if not series_info.has_key(name) \
+			or series_info[name] is None:
+				print >>sys.stderr,"couldn't determine series name: %s (%s)" % (i,name)
+				return
+
+		title,data = series_info[name]
+
+		if season not in data:
+			if name not in series_loaded_this_session:
+				del series_info[name]
+				continue
+			print >>sys.stderr,"Unknown season:",season,":",i
+			return
+
+		if episode not in data[season]:
+			# Reload the cache for this series since it's possibly
+			# stale.
+			if name not in series_loaded_this_session:
+				del series_info[name]
+				continue
+			print >>sys.stderr,"Unknown episode: s%02ie%02i: %s" % ( 
+							season,
+							episode,
+							i)
+			return
+
+		break
+
+	if outname is not None:
+		title=outname
+
+	expando_values={
+			"ffntitle" : extreme_fix_name(title),
+			"fntitle" : fix_name(title),
+			"title" : title,
+			"season" :season,
+			"ep" : episode,
+			"ffnname" : extreme_fix_name(data[season][episode]),
+			"fnname" : fix_name(data[season][episode]),
+			"name" : data[season][episode],
+			"ext" : ext,
+			}
+	try:
+		fname=expando % expando_values
+	except KeyError, e:
+		print >>sys.stderr,"Unknown expando %s, known expandos: %s" % (",".join(e.args),",".join(expando_values.keys()))
+		sys.exit(1)
+	# Just for good luck
+	fname=fname.strip()
+	fname=os.path.join(dirn,fname)
+	rename(f,fname)
+
+def usage(argv0):
+	print "usage: %s [-n|--no-act] [--format=format] [--title=title] files...." % argv0
+	print
+	print "Renames files to their epguides.com name"
+	print
+	print "-n"
+	print "--no-act		Don't actually rename the files, just display what"
+	print "			what would be done"
+	print
+	print "--format=%s" % repr(expando)
+	print "			Format to rename to"
+	print
+	print "--title=title	The name of the show (overrides autodetection)"
+	print
+	print "--name=title	The name of the show to use in filenames"
+	print 
+	print "--expand		Expand globs internally"
+	print "--no-expand	Don't expand globs internally"
+	sys.exit(1)
+
+if __name__=="__main__":
+	try:
+		args,files=getopt.gnu_getopt(sys.argv[1:],"nh",[
+			"no-act","format=","help","title=","expand","no-expand",
+			"name=","debug",
+			])
+	except getopt.GetoptError, e:
+		print e
+		usage(sys.argv[0])
+
+	if len(files)<1:
+		usage(sys.argv[0])
+
+	expand_glob = os.name!="posix"
+
+	title=None
+	name=None
+
+	for opt,arg in args:
+		if opt in ["-n","--no-act"]:
+			noact=1
+		elif opt in ["--format"]:
+			expando=arg
+		elif opt in ["--title"]:
+			title=arg
+		elif opt in ["--name"]:
+			name=arg
+		elif opt in ["--expand"]:
+			expand_glob=1
+		elif opt in ["--no-expand"]:
+			expand_glob=0
+		elif opt in ["-h","--help"]:
+			usage(sys.argv[0])
+		elif opt in ["--debug"]:
+			debug=1
+		elif opt in ["--parsable"]:
+			parsable=1
+		else:
+			print "Unknown option %s" % `opt`
+			usage(sys.argv[0])
+
+	series_info=load_cache()
+
+	if expand_glob:
+		files=reduce(lambda a,b:a+b,[glob.glob(file) for file in files])
+
+	for i in files:
+		process_file(i,title,name)
+
+	save_cache(series_info)
