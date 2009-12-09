@@ -423,6 +423,9 @@ if __name__=="__main__":
 		files=reduce(lambda a,b:a+b,[glob.glob(file) for file in files])
 
 	for i in files:
+		if os.path.isdir(i):
+			print >>sys.stderr,"Ignoring directory %r" % i
+			continue
 		process_file(i,title,name)
 
 	save_cache(series_info)
