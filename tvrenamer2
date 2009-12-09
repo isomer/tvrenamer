@@ -31,6 +31,18 @@
 #  * Deal with epguides latin1 encodings.
 # 2.11 (2009-11-17)
 #  * Correctly parse epguides when there are more than 9 seaons
+# 2.12 (2009-12-09)
+#  * Add support for ~/.tvrenamerrc
+#  * Add support for input_mapping
+#  * Ignore directories
+#
+# Config entries understood:
+#
+#  input_mapping /regex/ name
+#
+#   provide a regex that modifies a series name to a new name known by epguides
+#   eg: input_mapping /HouseMD/ House
+
 import urllib
 import sys
 import re
