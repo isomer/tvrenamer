@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # coding=latin1
-# TV Renamer v2.12
+# TV Renamer v2.13
 # (C) Copyright 2007-2009 Perry Lorier
 #
 # Latest version can be downloaded from
@@ -35,6 +35,8 @@
 #  * Add support for ~/.tvrenamerrc
 #  * Add support for input_mapping
 #  * Ignore directories
+# 2.13 (2009-12-09)
+#  * Fix very broken config parser
 #
 # Config entries understood:
 #
@@ -136,7 +138,7 @@ def parse_config():
 	f = open(fname,"r")
 	for i in f:
 		line = i.strip()
-		if line=="" or line.beginswith("#"):
+		if line=="" or line.startswith("#"):
 			continue
 		keyword,args = line.split(" ",1)
 		if keyword == "input_mapping":
@@ -156,7 +158,7 @@ def parse_config():
 		else:
 			print "Unknown config option %r, ignoring" % keyword
 			continue
-		f.close()
+	f.close()
 
 
 def fetchpage(title):
@@ -315,8 +317,12 @@ def series_patterns(name):
 def find_series_name(series_name):
 	# Try matching it to a series name
 	for match,replace in input_mapping:
+		if debug:
+			print "DEBUG: checking %s vs %s" % (series_name,match)
 		m = re.match(match, series_name)
 		if m:
+			if debug:
+				print "DEBUG: input_mapping %s -> %s" % (series_name,match)
 			series_name = replace
 			break
 	# Search to see if we can find something in our cache that
@@ -473,12 +479,15 @@ if __name__=="__main__":
 
 	series_info=load_cache()
 
+	parse_config()
+
 	if expand_glob:
 		files=reduce(lambda a,b:a+b,[glob.glob(file) for file in files])
 
 	for i in files:
 		if os.path.isdir(i):
-			print >>sys.stderr,"Ignoring directory %r" % i
+			if debug:
+				print "DEBUG: Ignoring directory %r" % i
 			continue
 		process_file(i,title,name)
 
