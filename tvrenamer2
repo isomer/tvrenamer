@@ -182,10 +182,11 @@ def fetchpage(title):
 		return None
 	return epdisplaytitle,data
 
-
 def rename(f,t):
 	"Attempt to rename a file, produce an error if it cannot be renamed, or if the destination exists to stderr, but dont raise an exception"
 	if f==t:
+		if debug:
+			print "DEBUG: File already renamed %r" % f
 		return
 	print "%s: %s" % (os.path.basename(f),os.path.basename(t))
 	if noact:
