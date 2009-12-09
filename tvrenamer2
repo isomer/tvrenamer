@@ -115,6 +115,38 @@ def unhtmlspecialchars(txt):
     ret = re.sub("(&#?[A-Za-z0-9]+;)", get_entity_char, txt)
     return ret.encode('utf8')
 
+input_mapping = []
+output_mapping = []
+def parse_config():
+	fname=os.path.expanduser("~/.tvrenamerrc")
+	if not os.path.exists(fname):
+		return
+	f = open(fname,"r")
+	for i in f:
+		line = i.strip()
+		if line=="" or line.beginswith("#"):
+			continue
+		keyword,args = line.split(" ",1)
+		if keyword == "input_mapping":
+			m=re.match(r"/([^/]*)/ *(.*)",args)
+			if not m:
+				print ("invalid syntax for input_mapping argument %s" % (args))
+				sys.exit(1)
+			else:
+				input_mapping.append((m.group(1),m.group(2)))
+		elif keyword == "output_mapping":
+			m=re.match(r"/([^/]*)/ *(.*)",args)
+			if not m:
+				print ("invalid syntax for output_mapping argument %s" % (args))
+				sys.exit(1)
+			else:
+				output_mapping.append((m.group(1),m.group(2)))
+		else:
+			print "Unknown config option %r, ignoring" % keyword
+			continue
+		f.close()
+
+
 def fetchpage(title):
 	url='http://epguides.com/%s/' % title
 
