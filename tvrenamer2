@@ -300,6 +300,30 @@ def series_patterns(name):
 
 	return ret
 
+def find_series_name(series_name):
+	# Try matching it to a series name
+	for match,replace in input_mapping:
+		m = re.match(match, series_name)
+		if m:
+			series_name = replace
+			break
+	# Search to see if we can find something in our cache that
+	# looks like it matches
+	for name2 in series_patterns(series_name):
+		if debug:
+			print "DEBUG: Considering",`name2`
+		if series_info.has_key(name2) \
+			and series_info[name2] is not None:
+				return name2
+	# Ok, try fetching pages for names we don't know about
+	for name2 in series_patterns(series_name):
+		series_info[name2]=fetchpage(name2)
+		series_loaded_this_session.append(name2)
+		if series_info[name2] is not None:
+			return name2
+	# Give up and return our current series_name
+	return series_name
+
 def process_file(fname,title,outname):
 	f=os.path.realpath(fname)
 	dirn=os.path.dirname(f)
@@ -320,21 +344,7 @@ def process_file(fname,title,outname):
 	# may want to run this again if we can't find the information we're
 	# looking for.
 	while 1:
-		# Search to see if we can find something in our cache that
-		# looks like it matches
-		for name2 in series_patterns(name):
-			if debug:
-				print "DEBUG: Considering",`name2`
-			if series_info.has_key(name2) \
-				and series_info[name2] is not None:
-					name=name2
-					break
-		else:
-			for name2 in series_patterns(name):
-				series_info[name2]=fetchpage(name2)
-				series_loaded_this_session.append(name2)
-				if series_info[name2] is not None:
-					name=name2
+		name = find_series_name(name)
 
 		if not series_info.has_key(name) \
 			or series_info[name] is None:
