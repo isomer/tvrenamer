@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # coding=latin1
-# TV Renamer v2.13
+# TV Renamer v2.14
 # (C) Copyright 2007-2009 Perry Lorier
 #
 # Latest version can be downloaded from
@@ -37,6 +37,8 @@
 #  * Ignore directories
 # 2.13 (2009-12-09)
 #  * Fix very broken config parser
+# 2.14 (2009-12-12)
+#  * Extend episode pattern matches
 #
 # Config entries understood:
 #
@@ -76,27 +78,31 @@ debug=0
 
 expando="%(fntitle)s - %(season)ix%(ep)02i - %(fnname)s.%(ext)s"
 
+seriesname = r"(?:e7-)?(.*?)"
+seperator = r"(?:[^A-Za-z0-9]|%20) *-? *"
+prefix = seriesname + seperator
+
 patterns=[
 	# seasonseasonEepisodeepisode
-	r'(?:e7-)?(.*?)[^A-Za-z0-9] *-? *[Ss]? *([0-9][0-9])[Eex]([0-9]+).*\.([^.]+)$', 
+	prefix+r'[Ss]? *([0-9][0-9])[Eex]([0-9]+).*\.([^.]+)$', 
 	# seasonEepisodeepisode
-	r'(.*?)[^A-Za-z0-9] *-? *[Ss]? *([0-9])[Eex]([0-9]+).*\.([^.]+)$',
+	prefix+r'[Ss]? *([0-9])[Eex]([0-9]+).*\.([^.]+)$',
 	# seasonseasonepisodeepisode
-	r'(.*?)[^A-Za-z0-9] *-? *[Ss]? *([0-9][0-9])([0-9][0-9]).*\.([^.]+)$',
+	prefix+r'[Ss]? *([0-9][0-9])([0-9][0-9]).*\.([^.]+)$',
 	# seasonepisodeepisode
-	r'(.*?)[^A-Za-z0-9] *-? *[Ss]? *([0-9])([0-9][0-9]).*\.([^.]+)$',
+	prefix+r'[Ss]? *([0-9])([0-9][0-9]).*\.([^.]+)$',
 	# seasonseason.episodeepisode
-	r'(.*?)[^A-Za-z0-9] *-? *[Ss]? *([0-9][0-9])\.([0-9][0-9]).*\.([^.]+)$',
+	prefix+r'[Ss]? *([0-9][0-9])\.([0-9][0-9]).*\.([^.]+)$',
 	# season.episodeepisode
-	r'(.*?)[^A-Za-z0-9] *-? *[Ss]? *([0-9])\.([0-9][0-9]).*\.([^.]+)$',
+	prefix+r'[Ss]? *([0-9])\.([0-9][0-9]).*\.([^.]+)$',
 	# Sseasonseason episodeepisode
-	r'(.*?)[^A-Za-z0-9] *-? *[Ss]([0-9]+) ?[Ee]([0-9]+).*\.([^.]+)$',
+	prefix+r'[Ss]([0-9]+) ?[Ee]([0-9]+).*\.([^.]+)$',
 	# Sseasonseason.Eepisodeepisode
-	r'(.*?)[^A-Za-z0-9] *-? *[Ss]([0-9]+).[Ee]([0-9]+).*\.([^.]+)$',
+	prefix+r'[Ss]([0-9]+).[Ee]([0-9]+).*\.([^.]+)$',
 	# Sseasonseason-episodeepisode
-	r'(.*?)[^A-Za-z0-9] *-? *[Ss]([0-9]+)-([0-9]+).*\.([^.]+)$',
+	prefix+r'[Ss]([0-9]+)-([0-9]+).*\.([^.]+)$',
 	# seasonseason-episodeepisode
-	r'(.*?)[^A-Za-z0-9] *-? *([0-9]+)-([0-9]+).*\.([^.]+)$',
+	prefix+r'([0-9]+)-([0-9]+).*\.([^.]+)$',
 ]
 
 def unhtmlspecialchars(txt):
