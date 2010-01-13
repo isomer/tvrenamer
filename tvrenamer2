@@ -197,10 +197,11 @@ def fetchpage(title):
 			newflag=0
 			i=i[:-(len("<title>")+1)]
 		if flag==1:
-			a=re.match(r'(?:.*\.?|<li>) +([0-9]+|S)- *([0-9]+).*["\']>(.*)</a>',i)
+			prefix=r"^(?:.*\.|<li>|[0-9]+)"
+			a=re.match(prefix+r' +([0-9]+|S)- *([0-9]+).*["\']>(.*)</a>',i)
 			# Sometimes they aren't linked
 			if not a:
-				a=re.match(r'(?:.*\.|<li>) +([0-9]+|S)- *([0-9]+).*[0-9][0-9]  (.*)',i)
+				a=re.match(prefix+r' +([0-9]+|S)- *([0-9]+).*[0-9][0-9]  (.*)',i)
 			if a:
 				if a.groups()[0]!="S":
 					season=int(a.groups()[0])
