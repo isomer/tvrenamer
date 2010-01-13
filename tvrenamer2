@@ -325,7 +325,7 @@ def find_series_name(series_name):
 	for match,replace in input_mapping:
 		if debug:
 			print "DEBUG: checking %s vs %s" % (series_name,match)
-		m = re.match(match, series_name)
+		m = re.match(match, series_name, re.IGNORECASE)
 		if m:
 			if debug:
 				print "DEBUG: input_mapping %s -> %s" % (series_name,match)
