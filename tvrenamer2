@@ -79,33 +79,39 @@ series_loaded_this_session=[]
 noact=0
 debug=0
 
-expando="%(fntitle)s - %(season)ix%(ep)02i - %(fnname)s.%(ext)s"
+#expando="%(fntitle)s - %(season)ix%(ep)02i - %(fnname)s.%(ext)s"
+expando="%(fntitle)s.S%(season)02iE%(ep)02i.%(ext)s"
 
-seriesname = r"(?:e7-)?(.*?)"
+seriesname = r"(?:e7-)?(?P<series>.*?)"
 seperator = r"(?:[^A-Za-z0-9]|%20) *-? *"
 prefix = seriesname + seperator
+ext = r".*\.(?P<ext>[^.]+)$"
 
 patterns=[
 	# seasonseasonEepisodeepisode
-	prefix+r'[Ss]? *([0-9][0-9])[Eex]([0-9]+).*\.([^.]+)$', 
+	prefix+r'[Ss]? *(?P<season>[0-9][0-9])[Eex](?P<ep>[0-9]+)'+ext,
 	# seasonEepisodeepisode
-	prefix+r'[Ss]? *([0-9])[Eex]([0-9]+).*\.([^.]+)$',
+	prefix+r'[Ss]? *(?P<season>[0-9])[Eex](?P<ep>[0-9]+)'+ext,
 	# seasonseasonepisodeepisode
-	prefix+r'[Ss]? *([0-9][0-9])([0-9][0-9]).*\.([^.]+)$',
+	prefix+r'[Ss]? *(?P<season>[0-9][0-9])(?P<ep>[0-9][0-9])'+ext,
 	# seasonepisodeepisode
-	prefix+r'[Ss]? *([0-9])([0-9][0-9]).*\.([^.]+)$',
+	prefix+r'[Ss]? *(?P<season>[0-9])(?P<ep>[0-9][0-9])'+ext,
 	# seasonseason.episodeepisode
-	prefix+r'[Ss]? *([0-9][0-9])\.([0-9][0-9]).*\.([^.]+)$',
+	prefix+r'[Ss]? *(?P<season>[0-9][0-9])\.(?P<ep>[0-9][0-9])'+ext,
 	# season.episodeepisode
-	prefix+r'[Ss]? *([0-9])\.([0-9][0-9]).*\.([^.]+)$',
+	prefix+r'[Ss]? *(?P<season>[0-9])\.(?P<ep>[0-9][0-9])'+ext,
 	# Sseasonseason episodeepisode
-	prefix+r'[Ss]([0-9]+) ?[Ee]([0-9]+).*\.([^.]+)$',
+	prefix+r'[Ss](?P<season>[0-9]+) ?[Ee](?P<ep>[0-9]+)'+ext,
 	# Sseasonseason.Eepisodeepisode
-	prefix+r'[Ss]([0-9]+).[Ee]([0-9]+).*\.([^.]+)$',
+	prefix+r'[Ss](?P<season>[0-9]+).[Ee](?P<ep>[0-9]+)'+ext,
 	# Sseasonseason-episodeepisode
-	prefix+r'[Ss]([0-9]+)-([0-9]+).*\.([^.]+)$',
+	prefix+r'[Ss](?P<season>[0-9]+)-(?P<ep>[0-9]+)'+ext,
 	# seasonseason-episodeepisode
-	prefix+r'([0-9]+)-([0-9]+).*\.([^.]+)$',
+	prefix+r'(?P<season>[0-9]+)-(?P<ep>[0-9]+)'+ext,
+	# Season season - Episode episodeepisode
+	prefix+r'Season *(?P<season>[0-9])'+seperator+'Episode *(?P<ep>[0-9]+)'+ext,
+	# seasonepisodeepisode
+	r'(?P<season>[0-9])(?P<ep>[0-9][0-9])'+seperator+ext,
 ]
 
 def unhtmlspecialchars(txt):
@@ -284,7 +290,13 @@ def parse_filename(fname):
 	for i in patterns:
 		a=re.match(i,fname)
 		if a: 
-			name,season,episode,ext=a.groups()
+			try:
+				name = a.group('series')
+			except IndexError:
+				name = ''
+			season=a.group('season')
+			episode=a.group('ep')
+			ext=a.group('ext')
 			if debug:
 				print "DEBUG: filename:",`fname`
 				print "DEBUG: pattern:",`i`
