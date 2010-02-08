@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # coding=latin1
-# TV Renamer v2.15
+# TV Renamer v2.16
 # (C) Copyright 2007-2010 Perry Lorier
 #
 # Latest version can be downloaded from
@@ -42,6 +42,8 @@
 # 2.15 (2010-01-14)
 #  * Updated screen scraping regex
 #  * Made ~/.tvrenamerrc case insensative on matching
+# 2.16 (2010-02-08)
+#  * Try and deal better with titles with years in them.
 #
 # Config entries understood:
 #
@@ -85,6 +87,7 @@ expando="%(fntitle)s.S%(season)02iE%(ep)02i.%(ext)s"
 seriesname = r"(?:e7-)?(?P<series>.*?)"
 seperator = r"(?:[^A-Za-z0-9]|%20) *-? *"
 prefix = seriesname + seperator
+year = r'(?P<year>19[5-9][0-9]|20[01][0-9])'
 ext = r".*\.(?P<ext>[^.]+)$"
 
 patterns=[
@@ -92,6 +95,10 @@ patterns=[
 	prefix+r'[Ss]? *(?P<season>[0-9][0-9])[Eex](?P<ep>[0-9]+)'+ext,
 	# seasonEepisodeepisode
 	prefix+r'[Ss]? *(?P<season>[0-9])[Eex](?P<ep>[0-9]+)'+ext,
+	# yearyearyearyear sep seasonseasonepisodeepisode
+	prefix+year+seperator+'[Ss]? *(?P<season>[0-9][0-9])(?P<ep>[0-9][0-9])'+ext,
+	# yearyearyearyear sep seasonseasonepisodeepisode
+	prefix+year+seperator+'[Ss]? *(?P<season>[0-9])(?P<ep>[0-9][0-9])'+ext,
 	# seasonseasonepisodeepisode
 	prefix+r'[Ss]? *(?P<season>[0-9][0-9])(?P<ep>[0-9][0-9])'+ext,
 	# seasonepisodeepisode
@@ -297,6 +304,11 @@ def parse_filename(fname):
 			season=a.group('season')
 			episode=a.group('ep')
 			ext=a.group('ext')
+			try:
+				name+='_'+a.group('year')
+			except IndexError:
+				pass
+				
 			if debug:
 				print "DEBUG: filename:",`fname`
 				print "DEBUG: pattern:",`i`
