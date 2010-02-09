@@ -81,8 +81,8 @@ series_loaded_this_session=[]
 noact=0
 debug=0
 
-#expando="%(fntitle)s - %(season)ix%(ep)02i - %(fnname)s.%(ext)s"
-expando="%(fntitle)s.S%(season)02iE%(ep)02i.%(ext)s"
+expando="%(fntitle)s - %(season)ix%(ep)02i - %(fnname)s.%(ext)s"
+#expando="%(fntitle)s.S%(season)02iE%(ep)02i.%(ext)s"
 
 seriesname = r"(?:e7-)?(?P<series>.*?)"
 seperator = r"(?:[^A-Za-z0-9]|%20) *-? *"
@@ -371,6 +371,8 @@ def find_series_name(series_name):
 	for name2 in series_patterns(series_name):
 		series_info[name2]=fetchpage(name2)
 		series_loaded_this_session.append(name2)
+		if debug:
+			print "DEBUG: Now trying",`name2`
 		if series_info[name2] is not None:
 			return name2
 	# Give up and return our current series_name
@@ -440,6 +442,9 @@ def process_file(fname,title,outname):
 			"name" : data[season][episode],
 			"ext" : ext,
 			}
+	if debug:
+		for k,v in expando_values.items():
+			print "DEBUG: %s: %s" % (k,v)
 	try:
 		fname=expando % expando_values
 	except KeyError, e:
