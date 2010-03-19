@@ -42,6 +42,13 @@
 # 2.15 (2010-01-14)
 #  * Updated screen scraping regex
 #  * Made ~/.tvrenamerrc case insensative on matching
+# 2.16 (2010-02-01)
+#  * Merged more patterns from etiam
+#  * Added config file support for overriding expandos
+# 2.17 (2010-03-19)
+#  * Add support for "origname" and "origext" expandos
+#  * Add support for ~/.tvrenamerlog
+#  * Add support for "lc" prefixes on expandos to lowercase things
 #
 # Config entries understood:
 #
@@ -49,6 +56,10 @@
 #
 #   provide a regex that modifies a series name to a new name known by epguides
 #   eg: input_mapping /HouseMD/ House
+#
+#  format expando
+# 
+#   provide a default expando
 
 import urllib
 import sys
@@ -58,6 +69,7 @@ import getopt
 import glob
 import pickle
 import htmlentitydefs
+import time
 
 # Load the tvrenamer cache
 def load_cache():
@@ -75,12 +87,20 @@ def save_cache(series_info):
 		raise
 		pass
 
+logfile=None
+def log(msg,*args):
+	global logfile
+	msg = msg % args
+	if not logfile:
+		logfile = open(os.path.expanduser("~/.tvrenamerlog"),"a")
+	logfile.write("%s: %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S %Z"),msg))
+	
+
 series_loaded_this_session=[]
 noact=0
 debug=0
 
-#expando="%(fntitle)s - %(season)ix%(ep)02i - %(fnname)s.%(ext)s"
-expando="%(fntitle)s.S%(season)02iE%(ep)02i.%(ext)s"
+expando="%(fntitle)s - %(season)ix%(ep)02i - %(fnname)s.%(ext)s"
 
 seriesname = r"(?:e7-)?(?P<series>.*?)"
 seperator = r"(?:[^A-Za-z0-9]|%20) *-? *"
@@ -147,6 +167,7 @@ def unhtmlspecialchars(txt):
 input_mapping = []
 output_mapping = []
 def parse_config():
+	global expando
 	fname=os.path.expanduser("~/.tvrenamerrc")
 	if not os.path.exists(fname):
 		return
@@ -170,6 +191,8 @@ def parse_config():
 				sys.exit(1)
 			else:
 				output_mapping.append((m.group(1),m.group(2)))
+		elif keyword == "format":
+			expando = args
 		else:
 			print "Unknown config option %r, ignoring" % keyword
 			continue
@@ -255,10 +278,13 @@ def rename(f,t):
 		return
 	if os.access(t,os.F_OK):
 		print >>sys.stderr,"Destination exists"
+		log("EXISTS %s: %s",os.path.realpath(f),os.path.realpath(t))
 		return
 	try:
 		os.rename(f,t)
+		log("RENAME %s: %s",os.path.realpath(f),os.path.realpath(t))
 	except OSError,e:
+		log("FAIL %s: %s",os.path.realpath(f),os.path.realpath(t))
 		print e
 
 # A lot of filesystems don't deal well with weird charactors, so strip
@@ -368,6 +394,7 @@ def process_file(fname,title,outname):
 	f=os.path.realpath(fname)
 	dirn=os.path.dirname(f)
 	fname=os.path.basename(f)
+	origname=fname
 
 	ret=parse_filename(fname)
 
@@ -417,17 +444,38 @@ def process_file(fname,title,outname):
 	if outname is not None:
 		title=outname
 
+	# Standard expandos
 	expando_values={
-			"ffntitle" : extreme_fix_name(title),
-			"fntitle" : fix_name(title),
 			"title" : title,
 			"season" :season,
 			"ep" : episode,
-			"ffnname" : extreme_fix_name(data[season][episode]),
-			"fnname" : fix_name(data[season][episode]),
 			"name" : data[season][episode],
+			"origname" : os.path.splitext(origname)[0],
+			"origext" : os.path.splitext(origname)[1],
 			"ext" : ext,
 			}
+	more_expandos=[]
+	# Prefixes:
+	#  lc -- lower case
+	#  fn -- fixed for filesystem issues (sigh)
+	#  ffn -- extremely fixed, A-Za-z and . 
+	#  fnlc -- fn+lc
+	#
+	# eg:
+	#  title == "Fish & Chips"
+	#  lctitle == "fish & chips"
+	#  fntitle == "Fish and Chips"
+	#  fnlctitle == "fish and chips"
+	#  ffntitle == "Fish.and.Chips"
+	#  ffnlctitle == "fish.and.chips"
+	for k,v in expando_values.items():
+		if type(v) == type("") or type(v) == type(u""):
+			more_expandos.append(("fn"+k,fix_name(v)))
+			more_expandos.append(("ffn"+k,extreme_fix_name(v)))
+			more_expandos.append(("lc"+k,v.lower()))
+			more_expandos.append(("fnlc"+k,fix_name(v.lower())))
+			more_expandos.append(("ffnlc"+k,extreme_fix_name(v.lower())))
+	expando_values.update(dict(more_expandos))
 	try:
 		fname=expando % expando_values
 	except KeyError, e:
