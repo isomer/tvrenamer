@@ -45,6 +45,8 @@
 # 2.16 (2010-02-01)
 #  * Merged more patterns from etiam
 #  * Added config file support for overriding expandos
+# 2.16 (2010-02-08)
+#  * Try and deal better with titles with years in them.
 # 2.17 (2010-03-19)
 #  * Add support for "origname" and "origext" expandos
 #  * Add support for ~/.tvrenamerlog
@@ -105,6 +107,7 @@ expando="%(fntitle)s - %(season)ix%(ep)02i - %(fnname)s.%(ext)s"
 seriesname = r"(?:e7-)?(?P<series>.*?)"
 seperator = r"(?:[^A-Za-z0-9]|%20) *-? *"
 prefix = seriesname + seperator
+year = r'(?P<year>19[5-9][0-9]|20[01][0-9])'
 ext = r".*\.(?P<ext>[^.]+)$"
 
 patterns=[
@@ -112,6 +115,10 @@ patterns=[
 	prefix+r'[Ss]? *(?P<season>[0-9][0-9])[Eex](?P<ep>[0-9]+)'+ext,
 	# seasonEepisodeepisode
 	prefix+r'[Ss]? *(?P<season>[0-9])[Eex](?P<ep>[0-9]+)'+ext,
+	# yearyearyearyear sep seasonseasonepisodeepisode
+	prefix+year+seperator+'[Ss]? *(?P<season>[0-9][0-9])(?P<ep>[0-9][0-9])'+ext,
+	# yearyearyearyear sep seasonseasonepisodeepisode
+	prefix+year+seperator+'[Ss]? *(?P<season>[0-9])(?P<ep>[0-9][0-9])'+ext,
 	# seasonseasonepisodeepisode
 	prefix+r'[Ss]? *(?P<season>[0-9][0-9])(?P<ep>[0-9][0-9])'+ext,
 	# seasonepisodeepisode
@@ -323,6 +330,11 @@ def parse_filename(fname):
 			season=a.group('season')
 			episode=a.group('ep')
 			ext=a.group('ext')
+			try:
+				name+='_'+a.group('year')
+			except IndexError:
+				pass
+				
 			if debug:
 				print "DEBUG: filename:",`fname`
 				print "DEBUG: pattern:",`i`
@@ -385,6 +397,8 @@ def find_series_name(series_name):
 	for name2 in series_patterns(series_name):
 		series_info[name2]=fetchpage(name2)
 		series_loaded_this_session.append(name2)
+		if debug:
+			print "DEBUG: Now trying",`name2`
 		if series_info[name2] is not None:
 			return name2
 	# Give up and return our current series_name
@@ -476,6 +490,9 @@ def process_file(fname,title,outname):
 			more_expandos.append(("fnlc"+k,fix_name(v.lower())))
 			more_expandos.append(("ffnlc"+k,extreme_fix_name(v.lower())))
 	expando_values.update(dict(more_expandos))
+	if debug:
+		for k,v in expando_values.items():
+			print "DEBUG: %s: %s" % (k,v)
 	try:
 		fname=expando % expando_values
 	except KeyError, e:
