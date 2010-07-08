@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # coding=latin1
-# TV Renamer v2.17
+# TV Renamer v2.18
 # (C) Copyright 2007-2010 Perry Lorier
 #
 # Latest version can be downloaded from
@@ -51,6 +51,8 @@
 #  * Add support for "origname" and "origext" expandos
 #  * Add support for ~/.tvrenamerlog
 #  * Add support for "lc" prefixes on expandos to lowercase things
+# 2.18 (2010-07-09)
+#  * Add better support for parsing new epguides pages with recaps and trailers.
 #
 # Config entries understood:
 #
@@ -62,6 +64,9 @@
 #  format expando
 # 
 #   provide a default expando
+#
+# TODO:
+#  Add hash + filelength to the ~/.tvrenamerlog
 
 import urllib
 import sys
@@ -237,10 +242,7 @@ def fetchpage(title):
 			i=i[:-(len("<title>")+1)]
 		if flag==1:
 			prefix=r"^(?:.*\.|<li>|[0-9]+)"
-			a=re.match(prefix+r' +([0-9]+|S)- *([0-9]+).*["\']>(.*)</a>',i)
-			# Sometimes they aren't linked
-			if not a:
-				a=re.match(prefix+r' +([0-9]+|S)- *([0-9]+).*[0-9][0-9]  (.*)',i)
+			a=re.match(prefix+r' +([0-9]+|S)- *([0-9]+).*[0-9][0-9]  +(.*)',i)
 			if a:
 				if a.groups()[0]!="S":
 					season=int(a.groups()[0])
@@ -249,7 +251,12 @@ def fetchpage(title):
 				ep=int(a.groups()[1])
 				if not data.has_key(season):
 					data[season]={}
-				data[season][ep]=unhtmlspecialchars(a.groups()[2])
+				title=a.groups()[2]
+				if title.startswith("<a"):
+					b = re.match("<a[^>]*>([^</]+)</.*",title)
+					if b:
+						title=b.groups()[0]
+				data[season][ep]=unhtmlspecialchars(title)
 				if debug:
 					print "DEBUG: Found:",repr(season),repr(ep),repr(data[season][ep])
 			else:
