@@ -51,6 +51,8 @@
 #  * Add support for "origname" and "origext" expandos
 #  * Add support for ~/.tvrenamerlog
 #  * Add support for "lc" prefixes on expandos to lowercase things
+# 2.18 (2010-03-29)
+#  * Be smarter about postprocessing series names to try and guess more
 #
 # Config entries understood:
 #
@@ -96,6 +98,10 @@ def log(msg,*args):
 	if not logfile:
 		logfile = open(os.path.expanduser("~/.tvrenamerlog"),"a")
 	logfile.write("%s: %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S %Z"),msg))
+
+def debugmsg(msg,*args):
+	if debug:
+		print "DEBUG: %s" % (msg % args)
 	
 
 series_loaded_this_session=[]
@@ -104,41 +110,34 @@ debug=0
 
 expando="%(fntitle)s - %(season)ix%(ep)02i - %(fnname)s.%(ext)s"
 
-seriesname = r"(?:e7-)?(?P<series>.*?)"
+prefixcrap=r"(?:e7-)?"
+seriesname = r"(?P<series>.*?)"
+prefix = prefixcrap+seriesname 
 seperator = r"(?:[^A-Za-z0-9]|%20) *-? *"
-prefix = seriesname + seperator
-year = r'(?P<year>19[5-9][0-9]|20[01][0-9])'
+year = r'(?:\(?(?P<year>20[01][0-9]|19[5-9][0-9])\)?)'
 ext = r".*\.(?P<ext>[^.]+)$"
+season= r"(?P<season>[0-9]{1,2})"
+episode='(?P<ep>[0-9][0-9])'
 
 patterns=[
-	# seasonseasonEepisodeepisode
-	prefix+r'[Ss]? *(?P<season>[0-9][0-9])[Eex](?P<ep>[0-9]+)'+ext,
-	# seasonEepisodeepisode
-	prefix+r'[Ss]? *(?P<season>[0-9])[Eex](?P<ep>[0-9]+)'+ext,
-	# yearyearyearyear sep seasonseasonepisodeepisode
-	prefix+year+seperator+'[Ss]? *(?P<season>[0-9][0-9])(?P<ep>[0-9][0-9])'+ext,
-	# yearyearyearyear sep seasonseasonepisodeepisode
-	prefix+year+seperator+'[Ss]? *(?P<season>[0-9])(?P<ep>[0-9][0-9])'+ext,
-	# seasonseasonepisodeepisode
-	prefix+r'[Ss]? *(?P<season>[0-9][0-9])(?P<ep>[0-9][0-9])'+ext,
+	# year sep seasonseasonEepisodeepisode
+	prefix+" *"+year+"?"+seperator+r'[Ss]? *'+season+'[Eex]'+episode+ext,
+	# year sep seasonseasonepisodeepisode
+	prefix+" *"+year+"?"+seperator+r'[Ss]? *'+season+episode+ext,
 	# seasonepisodeepisode
-	prefix+r'[Ss]? *(?P<season>[0-9])(?P<ep>[0-9][0-9])'+ext,
-	# seasonseason.episodeepisode
-	prefix+r'[Ss]? *(?P<season>[0-9][0-9])\.(?P<ep>[0-9][0-9])'+ext,
+	prefix+seperator+r'[Ss]? *'+season+episode+ext,
 	# season.episodeepisode
-	prefix+r'[Ss]? *(?P<season>[0-9])\.(?P<ep>[0-9][0-9])'+ext,
+	prefix+seperator+r'[Ss]? *'+season+'\.'+episode+ext,
 	# Sseasonseason episodeepisode
-	prefix+r'[Ss](?P<season>[0-9]+) ?[Ee](?P<ep>[0-9]+)'+ext,
+	prefix+seperator+r'[Ss]'+season+' ?[Ee]'+episode+ext,
 	# Sseasonseason.Eepisodeepisode
-	prefix+r'[Ss](?P<season>[0-9]+).[Ee](?P<ep>[0-9]+)'+ext,
+	prefix+seperator+r'[Ss]'+season+'.[Ee]'+episode+ext,
 	# Sseasonseason-episodeepisode
-	prefix+r'[Ss](?P<season>[0-9]+)-(?P<ep>[0-9]+)'+ext,
-	# seasonseason-episodeepisode
-	prefix+r'(?P<season>[0-9]+)-(?P<ep>[0-9]+)'+ext,
+	prefix+seperator+r'[Ss]?'+season+'-'+episode+ext,
 	# Season season - Episode episodeepisode
-	prefix+r'Season *(?P<season>[0-9])'+seperator+'Episode *(?P<ep>[0-9]+)'+ext,
+	prefix+seperator+r'Season *'+season+seperator+'Episode *'+episode+ext,
 	# seasonepisodeepisode
-	r'(?P<season>[0-9])(?P<ep>[0-9][0-9])'+seperator+ext,
+	season+episode+seperator+ext,
 ]
 
 def unhtmlspecialchars(txt):
@@ -209,8 +208,7 @@ def parse_config():
 def fetchpage(title):
 	url='http://epguides.com/%s/' % title
 
-	if debug:
-		print "DEBUG: Fetching %s" % `url`
+	debugmsg("Fetching %s" % `url`)
 
 	epdisplaytitle = ""
 	a=urllib.urlopen(url)
@@ -254,7 +252,8 @@ def fetchpage(title):
 					print "DEBUG: Found:",repr(season),repr(ep),repr(data[season][ep])
 			else:
 				if debug and i!="":
-					print "DEBUG: Unmatched line",`i`
+					#print "DEBUG: Unmatched line",`i`
+					pass
 		elif flag==2:
 			if i.strip()!='':
 				if re.match(r"^(.*) *\(.*\)",i):
@@ -316,9 +315,6 @@ def extreme_fix_name(fname):
 
 def parse_filename(fname):
 	"fname -> seriesname,seasonnum,epnum,ext"
-	# remove things that look like dates
-	fname=re.sub(r'[-/]20[0-9]','',fname)
-	fname=re.sub(r'[-/]19[789][0-9]','',fname)
 	# Now match it against known patterns
 	for i in patterns:
 		a=re.match(i,fname)
@@ -331,17 +327,18 @@ def parse_filename(fname):
 			episode=a.group('ep')
 			ext=a.group('ext')
 			try:
-				name+='_'+a.group('year')
+				if a.group('year'):
+					name+=a.group('year')
 			except IndexError:
 				pass
 				
-			if debug:
-				print "DEBUG: filename:",`fname`
-				print "DEBUG: pattern:",`i`
-				print "DEBUG: Name:",`name`
-				print "DEBUG: Season:",`season`
-				print "DEBUG: Episode:",`episode`
-				print "DEBUG: Extension:",`ext`
+			debugmsg("filename: %s",`fname`)
+			debugmsg("Pattern: %s",`i`)
+			debugmsg("Year: %s",`a.group('year')`)
+			debugmsg("Name: %s",`name`)
+			debugmsg("Season: %s",`season`)
+			debugmsg("Episode: %s",`episode`)
+			debugmsg("Extension: %s",`ext`)
 			if re.match(r"^the[^a-z]",name.lower()):
 				if debug:
 					print "DEBUG: stripping 'the' prefix"
@@ -350,10 +347,8 @@ def parse_filename(fname):
 				if debug:
 					print "DEBUG: stripping ', the' suffix"
 				name=name[:-5]
-			if debug:
-				print "DEBUG: final name:",`name`
-			return (
-				re.sub(r"[^A-Za-z0-9]","",name),
+			debugmsg("final name %r" % name)
+			return (name,
 				int(season),
 				int(episode),
 				ext)
@@ -374,31 +369,87 @@ def series_patterns(name):
 
 	return ret
 
+def series_name_prefixes(name):
+	"Strip group- prefixes"
+	oldname=name
+	while "-" in name:
+		prefix,name=name.split("-",1)
+		yield name
+	yield oldname
+
+def series_name_year(name):
+	"Try with and without _year suffix"
+	yield name
+	# Is there a year on the end?
+	if not re.match(".*(19[5-9][0-9]|20[01][0-9])$",name):
+		return
+	year=name[-4:]
+	name=name[:-4]
+	if name.endswith("_"):
+		name=name[:-1]
+	if name.endswith("."):
+		yield name[:-1]+"_"+year
+	yield name+"_"+year
+	yield name	
+
+def series_name_punctuation(name):
+	"Try removing various bits of punctuation to cleanup the name"
+	# Unmodified
+	yield name
+	# Remove all punctuation
+	yield re.sub("[^A-Za-z0-9]","",name)
+	# Remove all trailing punctuation
+	yield re.sub(".*?[^A-Za-z0-9]","",name)
+
+def series_name_suggestions(series_names):
+	"Given a series name, return a list of possible things to look for"
+	suggestions=series_names
+	for i in [
+			series_name_prefixes, 
+			series_name_year,
+			series_name_punctuation]:
+		newsuggestions=[]
+		while suggestions:
+			name = suggestions.pop(0)
+			for j in i(name):
+				debugmsg("%s -%s-> %s" % (name,i.__name__,j))
+				newsuggestions.append(j)
+		suggestions=newsuggestions
+	# Uniquify suggestions
+	suggestion_count={}
+	unique_suggestions=[]
+	for i in suggestions:
+		suggestion_count[i]=suggestion_count.get(i,0)+1
+		if suggestion_count[i]==1:
+			unique_suggestions.append(i)
+	return unique_suggestions
+			
 def find_series_name(series_name):
 	# Try matching it to a series name
 	for match,replace in input_mapping:
-		if debug:
-			print "DEBUG: checking %s vs %s" % (series_name,match)
+		debugmsg( "DEBUG: checking %s vs %s" % (series_name,match))
 		m = re.match(match, series_name, re.IGNORECASE)
 		if m:
-			if debug:
-				print "DEBUG: input_mapping %s -> %s" % (series_name,match)
+			debugmsg("input_mapping %s -> %s" % (series_name,match))
 			series_name = replace
 			break
+	suggestions = series_patterns(series_name)
+	suggestions = series_name_suggestions(suggestions)
+	for i in suggestions:
+		debugmsg("Possible Series Names: %s" % i)
 	# Search to see if we can find something in our cache that
 	# looks like it matches
-	for name2 in series_patterns(series_name):
-		if debug:
-			print "DEBUG: Considering",`name2`
+	for name2 in suggestions:
+		debugmsg("Considering %r" % name2)
 		if series_info.has_key(name2) \
 			and series_info[name2] is not None:
 				return name2
 	# Ok, try fetching pages for names we don't know about
-	for name2 in series_patterns(series_name):
+	for name2 in suggestions:
 		series_info[name2]=fetchpage(name2)
+		#series_info[name2]=None
 		series_loaded_this_session.append(name2)
-		if debug:
-			print "DEBUG: Now trying",`name2`
+		debugmsg("Now trying %r" % name2)
 		if series_info[name2] is not None:
 			return name2
 	# Give up and return our current series_name
