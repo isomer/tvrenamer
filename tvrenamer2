@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # coding=latin1
-# TV Renamer v2.17
+# TV Renamer v2.20
 # (C) Copyright 2007-2010 Perry Lorier
 #
 # Latest version can be downloaded from
@@ -51,8 +51,12 @@
 #  * Add support for "origname" and "origext" expandos
 #  * Add support for ~/.tvrenamerlog
 #  * Add support for "lc" prefixes on expandos to lowercase things
-# 2.18 (2010-03-29)
+# 2.18 (2010-07-09)
+#  * Add better support for parsing new epguides pages with recaps and trailers.
+# 2.19 (2010-07-11)
 #  * Be smarter about postprocessing series names to try and guess more
+# 2.20 (2010-07-14)
+#  * Deal with escaped urls: "%20" -> " "
 #
 # Config entries understood:
 #
@@ -64,6 +68,9 @@
 #  format expando
 # 
 #   provide a default expando
+#
+# TODO:
+#  Add hash + filelength to the ~/.tvrenamerlog
 
 import urllib
 import sys
@@ -208,7 +215,7 @@ def parse_config():
 def fetchpage(title):
 	url='http://epguides.com/%s/' % title
 
-	debugmsg("Fetching %s" % `url`)
+	debugmsg("Fetching %r",url)
 
 	epdisplaytitle = ""
 	a=urllib.urlopen(url)
@@ -235,10 +242,7 @@ def fetchpage(title):
 			i=i[:-(len("<title>")+1)]
 		if flag==1:
 			prefix=r"^(?:.*\.|<li>|[0-9]+)"
-			a=re.match(prefix+r' +([0-9]+|S)- *([0-9]+).*["\']>(.*)</a>',i)
-			# Sometimes they aren't linked
-			if not a:
-				a=re.match(prefix+r' +([0-9]+|S)- *([0-9]+).*[0-9][0-9]  (.*)',i)
+			a=re.match(prefix+r' +([0-9]+|S)- *([0-9]+).*[0-9][0-9]  +(.*)',i)
 			if a:
 				if a.groups()[0]!="S":
 					season=int(a.groups()[0])
@@ -247,7 +251,12 @@ def fetchpage(title):
 				ep=int(a.groups()[1])
 				if not data.has_key(season):
 					data[season]={}
-				data[season][ep]=unhtmlspecialchars(a.groups()[2])
+				title=a.groups()[2]
+				if title.startswith("<a"):
+					b = re.match("<a[^>]*>([^</]+)</.*",title)
+					if b:
+						title=b.groups()[0]
+				data[season][ep]=unhtmlspecialchars(title)
 				if debug:
 					print "DEBUG: Found:",repr(season),repr(ep),repr(data[season][ep])
 			else:
@@ -334,7 +343,7 @@ def parse_filename(fname):
 				
 			debugmsg("filename: %s",`fname`)
 			debugmsg("Pattern: %s",`i`)
-			debugmsg("Year: %s",`a.group('year')`)
+			#debugmsg("Year: %s",`a.group('year')`)
 			debugmsg("Name: %s",`name`)
 			debugmsg("Season: %s",`season`)
 			debugmsg("Episode: %s",`episode`)
@@ -347,7 +356,7 @@ def parse_filename(fname):
 				if debug:
 					print "DEBUG: stripping ', the' suffix"
 				name=name[:-5]
-			debugmsg("final name %r" % name)
+			debugmsg("final name %r",name)
 			return (name,
 				int(season),
 				int(episode),
@@ -398,8 +407,15 @@ def series_name_punctuation(name):
 	yield name
 	# Remove all punctuation
 	yield re.sub("[^A-Za-z0-9]","",name)
-	# Remove all trailing punctuation
+	# Remove only trailing punctuation
 	yield re.sub(".*?[^A-Za-z0-9]","",name)
+
+def series_name_unescape(name):
+	"Try replacing %nn with the correct bytes"
+	# Unmodified
+	yield name
+	# Unquoting (eg "%20" -> " ")
+	yield urllib.unquote(name)
 
 def series_name_suggestions(series_names):
 	"Given a series name, return a list of possible things to look for"
@@ -407,12 +423,14 @@ def series_name_suggestions(series_names):
 	for i in [
 			series_name_prefixes, 
 			series_name_year,
-			series_name_punctuation]:
+			series_name_unescape,
+			series_name_punctuation,
+			]:
 		newsuggestions=[]
 		while suggestions:
 			name = suggestions.pop(0)
 			for j in i(name):
-				debugmsg("%s -%s-> %s" % (name,i.__name__,j))
+				debugmsg("%s -%s-> %s",name,i.__name__,j)
 				newsuggestions.append(j)
 		suggestions=newsuggestions
 	# Uniquify suggestions
@@ -427,20 +445,20 @@ def series_name_suggestions(series_names):
 def find_series_name(series_name):
 	# Try matching it to a series name
 	for match,replace in input_mapping:
-		debugmsg( "DEBUG: checking %s vs %s" % (series_name,match))
+		debugmsg( "checking %r vs %r",series_name,match)
 		m = re.match(match, series_name, re.IGNORECASE)
 		if m:
-			debugmsg("input_mapping %s -> %s" % (series_name,match))
+			debugmsg("input_mapping %s -> %s",series_name,match)
 			series_name = replace
 			break
 	suggestions = series_patterns(series_name)
 	suggestions = series_name_suggestions(suggestions)
 	for i in suggestions:
-		debugmsg("Possible Series Names: %s" % i)
+		debugmsg("Possible Series Names: %s",i)
 	# Search to see if we can find something in our cache that
 	# looks like it matches
 	for name2 in suggestions:
-		debugmsg("Considering %r" % name2)
+		debugmsg("Considering %r",name2)
 		if series_info.has_key(name2) \
 			and series_info[name2] is not None:
 				return name2
@@ -449,7 +467,7 @@ def find_series_name(series_name):
 		series_info[name2]=fetchpage(name2)
 		#series_info[name2]=None
 		series_loaded_this_session.append(name2)
-		debugmsg("Now trying %r" % name2)
+		debugmsg("Now trying %r",name2)
 		if series_info[name2] is not None:
 			return name2
 	# Give up and return our current series_name
