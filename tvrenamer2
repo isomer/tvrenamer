@@ -128,9 +128,9 @@ episode='(?P<ep>[0-9][0-9])'
 
 patterns=[
 	# year sep seasonseasonEepisodeepisode
-	prefix+" *"+year+"?"+seperator+r'[Ss]? *'+season+'[Eex]'+episode+ext,
+	prefix+seperator+year+"?"+seperator+r'[Ss]? *'+season+'[Eex]'+episode+ext,
 	# year sep seasonseasonepisodeepisode
-	prefix+" *"+year+"?"+seperator+r'[Ss]? *'+season+episode+ext,
+	prefix+seperator+year+"?"+seperator+r'[Ss]? *'+season+episode+ext,
 	# seasonepisodeepisode
 	prefix+seperator+r'[Ss]? *'+season+episode+ext,
 	# season.episodeepisode
