@@ -358,35 +358,12 @@ def parse_filename(fname):
 			debugmsg("Season: %s",`season`)
 			debugmsg("Episode: %s",`episode`)
 			debugmsg("Extension: %s",`ext`)
-			if re.match(r"^the[^a-z]",name.lower()):
-				if debug:
-					print "DEBUG: stripping 'the' prefix"
-				name=name[3:]
-			if name.lower().endswith(", the"):
-				if debug:
-					print "DEBUG: stripping ', the' suffix"
-				name=name[:-5]
-			debugmsg("final name %r",name)
 			return (name,
 				int(season),
 				int(episode),
 				ext)
 	# The filename follows no known pattern.
 	return None
-
-# Series patterns
-# Taking a name of a series, try and extrapolate what it might be called
-def series_patterns(name):
-	ret=[]
-	# Try the raw series name
-	ret.append(name)
-	# Dates at the end might indicate that this series has two runs 
-	# from different dates.
-	if re.match(r"^(19[5-9][0-9]|20[0-1][0-9])$",name[-4:]):
-		ret.append(name[:-4]+"_"+name[-4:])
-		ret.append(name[:-4])
-
-	return ret
 
 def series_name_prefixes(name):
 	"Strip group- prefixes"
@@ -464,8 +441,7 @@ def find_series_name(series_name):
 			debugmsg("input_mapping %s -> %s",series_name,match)
 			series_name = replace
 			break
-	suggestions = series_patterns(series_name)
-	suggestions = series_name_suggestions(suggestions)
+	suggestions = series_name_suggestions([series_name])
 	for i in suggestions:
 		debugmsg("Possible Series Names: %s",i)
 	# Search to see if we can find something in our cache that
