@@ -57,6 +57,9 @@
 #  * Be smarter about postprocessing series names to try and guess more
 # 2.20 (2010-07-14)
 #  * Deal with escaped urls: "%20" -> " "
+# 2.21 (2011-04-25)
+#  * Better epguides.com parsing.
+#  * Added better guessing (again) for years.
 #
 # Config entries understood:
 #
@@ -242,7 +245,11 @@ def fetchpage(title):
 			i=i[:-(len("<title>")+1)]
 		if flag==1:
 			prefix=r"^(?:.*\.|<li>|[0-9]+)"
-			a=re.match(prefix+r' +([0-9]+|S)- *([0-9]+).*[0-9][0-9]  +(.*)',i)
+			season=r"([0-9]+|S)-"
+			episode=r"([0-9]+)"
+			marker = r".*(?:[0-9][0-9]|__) +"
+			rest = r"(.*)"
+			a=re.match(prefix+r' +'+season+r' *'+episode+marker+rest,i)
 			if a:
 				if a.groups()[0]!="S":
 					season=int(a.groups()[0])
@@ -398,15 +405,17 @@ def series_name_year(name):
 	name=name[:-4]
 	if name.endswith("_"):
 		name=name[:-1]
-	if name.endswith("."):
-		yield name[:-1]+"_"+year
-	yield name+"_"+year
-	yield name	
+	for names in series_name_suggestions([name]):
+		if name.endswith("."):
+			yield name[:-1]+"_"+year
+		yield name+"_"+year
 
 def series_name_punctuation(name):
 	"Try removing various bits of punctuation to cleanup the name"
 	# Unmodified
 	yield name
+	# Remove spaces
+	yield re.sub(" ","",name)
 	# Remove all punctuation
 	yield re.sub("[^A-Za-z0-9]","",name)
 	# Remove only trailing punctuation
@@ -442,6 +451,7 @@ def series_name_suggestions(series_names):
 		suggestion_count[i]=suggestion_count.get(i,0)+1
 		if suggestion_count[i]==1:
 			unique_suggestions.append(i)
+	debugmsg("Suggestions: %r",unique_suggestions)
 	return unique_suggestions
 			
 def find_series_name(series_name):
@@ -466,10 +476,10 @@ def find_series_name(series_name):
 				return name2
 	# Ok, try fetching pages for names we don't know about
 	for name2 in suggestions:
+		debugmsg("Now trying %r",name2)
 		series_info[name2]=fetchpage(name2)
 		#series_info[name2]=None
 		series_loaded_this_session.append(name2)
-		debugmsg("Now trying %r",name2)
 		if series_info[name2] is not None:
 			return name2
 	# Give up and return our current series_name
