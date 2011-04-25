@@ -124,6 +124,7 @@ prefixcrap=r"(?:e7-)?"
 seriesname = r"(?P<series>.*?)"
 prefix = prefixcrap+seriesname 
 seperator = r"(?:[^A-Za-z0-9]|%20) *-? *"
+oseperator = r"(?:"+seperator+")?"
 year = r'(?:\(?(?P<year>20[01][0-9]|19[5-9][0-9])\)?)'
 ext = r".*\.(?P<ext>[^.]+)$"
 season= r"(?P<season>[0-9]{1,2})"
@@ -131,9 +132,9 @@ episode='(?P<ep>[0-9][0-9])'
 
 patterns=[
 	# year sep seasonseasonEepisodeepisode
-	prefix+seperator+year+"?"+seperator+r'[Ss]? *'+season+'[Eex]'+episode+ext,
+	prefix+oseperator+year+"?"+seperator+r'[Ss]? *'+season+'[Eex]'+episode+ext,
 	# year sep seasonseasonepisodeepisode
-	prefix+seperator+year+"?"+seperator+r'[Ss]? *'+season+episode+ext,
+	prefix+oseperator+year+"?"+seperator+r'[Ss]? *'+season+episode+ext,
 	# seasonepisodeepisode
 	prefix+seperator+r'[Ss]? *'+season+episode+ext,
 	# season.episodeepisode
