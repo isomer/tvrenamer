@@ -383,10 +383,10 @@ def series_name_year(name):
 	name=name[:-4]
 	if name.endswith("_"):
 		name=name[:-1]
-	for names in series_name_suggestions([name]):
-		if name.endswith("."):
-			yield name[:-1]+"_"+year
-		yield name+"_"+year
+	if name.endswith("."):
+		yield name[:-1]+"_"+year
+	yield name+"_"+year
+	yield name
 
 def series_name_punctuation(name):
 	"Try removing various bits of punctuation to cleanup the name"
@@ -397,7 +397,7 @@ def series_name_punctuation(name):
 	# Remove all punctuation
 	yield re.sub("[^A-Za-z0-9]","",name)
 	# Remove only trailing punctuation
-	yield re.sub(".*?[^A-Za-z0-9]","",name)
+	yield re.sub("[^A-Za-z0-9]*$","",name)
 
 def series_name_unescape(name):
 	"Try replacing %nn with the correct bytes"
@@ -406,31 +406,43 @@ def series_name_unescape(name):
 	# Unquoting (eg "%20" -> " ")
 	yield urllib.unquote(name)
 
+def series_name_the(name):
+	"Try removing The as a prefix or suffix"
+	# Unmodified
+	yield name
+	if re.match(r"^the[^a-z]",name.lower()):
+		name=name[3:]
+		if name.startswith(".") or name.startswith("_"):
+			name=name[1:]
+		yield name
+	if name.lower().endswith(", the"):
+		yield name[:-5]
+
 def series_name_suggestions(series_names):
 	"Given a series name, return a list of possible things to look for"
-	suggestions=series_names
-	for i in [
-			series_name_prefixes, 
-			series_name_year,
-			series_name_unescape,
+	suggestors = [
 			series_name_punctuation,
-			]:
-		newsuggestions=[]
-		while suggestions:
-			name = suggestions.pop(0)
-			for j in i(name):
-				debugmsg("%s -%s-> %s",name,i.__name__,j)
-				newsuggestions.append(j)
-		suggestions=newsuggestions
-	# Uniquify suggestions
-	suggestion_count={}
-	unique_suggestions=[]
-	for i in suggestions:
-		suggestion_count[i]=suggestion_count.get(i,0)+1
-		if suggestion_count[i]==1:
-			unique_suggestions.append(i)
-	debugmsg("Suggestions: %r",unique_suggestions)
-	return unique_suggestions
+			series_name_unescape,
+			series_name_year,
+			series_name_the,
+			series_name_prefixes,
+			]
+	suggestions = series_names
+	newsuggestions = []
+	flag = True
+	while suggestions:
+		name = suggestions.pop(0)
+		if name in newsuggestions:
+			continue
+		newsuggestions.append(name)
+		for suggestor in suggestors:
+			for newname in suggestor(name):
+				debugmsg("%s -%s-> %s",
+					name, suggestor.__name__, newname)
+				suggestions.append(newname)
+
+	debugmsg("Suggestions: %r",newsuggestions)
+	return newsuggestions
 			
 def find_series_name(series_name):
 	# Try matching it to a series name
