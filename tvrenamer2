@@ -57,6 +57,8 @@
 #  * Be smarter about postprocessing series names to try and guess more
 # 2.20 (2010-07-14)
 #  * Deal with escaped urls: "%20" -> " "
+# 2.21 (2011-04-25)
+#  * Better epguides.com parsing.
 #
 # Config entries understood:
 #
@@ -242,7 +244,11 @@ def fetchpage(title):
 			i=i[:-(len("<title>")+1)]
 		if flag==1:
 			prefix=r"^(?:.*\.|<li>|[0-9]+)"
-			a=re.match(prefix+r' +([0-9]+|S)- *([0-9]+).*[0-9][0-9]  +(.*)',i)
+			season=r"([0-9]+|S)-"
+			episode=r"([0-9]+)"
+			marker = r".*(?:[0-9][0-9]|__) +"
+			rest = r"(.*)"
+			a=re.match(prefix+r' +'+season+r' *'+episode+marker+rest,i)
 			if a:
 				if a.groups()[0]!="S":
 					season=int(a.groups()[0])
@@ -261,7 +267,7 @@ def fetchpage(title):
 					print "DEBUG: Found:",repr(season),repr(ep),repr(data[season][ep])
 			else:
 				if debug and i!="":
-					#print "DEBUG: Unmatched line",`i`
+					print "DEBUG: Unmatched line",`i`
 					pass
 		elif flag==2:
 			if i.strip()!='':
