@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # coding=latin1
-# TV Renamer v2.20
-# (C) Copyright 2007-2010 Perry Lorier
+# TV Renamer v2.22
+# (C) Copyright 2007-2011 Perry Lorier
 #
 # Latest version can be downloaded from
 #  http://github.com/isomer/tvrenamer/tree/master
@@ -60,6 +60,8 @@
 # 2.21 (2011-04-25)
 #  * Better epguides.com parsing.
 #  * Added better guessing (again) for years.
+# 2.22 (2011-04-25)
+#  * Major refactor of the epguides name guessing code.
 #
 # Config entries understood:
 #
