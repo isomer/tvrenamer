@@ -480,10 +480,10 @@ def process_file(fname,title,outname):
 	fname=os.path.basename(f)
 	origname=fname
 
-	ret=parse_filename(fname)
+	ret=parse_filename(origname)
 
 	if not ret:
-		print >>sys.stderr,"can't determine episode number:",i
+		print >>sys.stderr,"can't determine episode number:",repr(origname)
 		return
 
 	name,season,episode,ext = ret
