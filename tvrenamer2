@@ -253,9 +253,11 @@ def fetchpage(title):
 					data[season]={}
 				title=a.groups()[2]
 				if title.startswith("<a"):
-					b = re.match("<a[^>]*>([^</]+)</.*",title)
+					b = re.match("<a[^>]*>([^<]+)</.*",title)
 					if b:
 						title=b.groups()[0]
+					else:
+						print "failed to clean",repr(title)
 				data[season][ep]=unhtmlspecialchars(title)
 				if debug:
 					print "DEBUG: Found:",repr(season),repr(ep),repr(data[season][ep])
