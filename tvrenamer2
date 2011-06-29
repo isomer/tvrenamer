@@ -62,6 +62,8 @@
 #  * Added better guessing (again) for years.
 # 2.22 (2011-04-25)
 #  * Major refactor of the epguides name guessing code.
+# 2.23 (2011-06-29)
+#  * Deal with UNAIRED (Direct to dvd) shows
 #
 # Config entries understood:
 #
@@ -250,7 +252,7 @@ def fetchpage(title):
 			prefix=r"^(?:.*\.|<li>|[0-9]+)"
 			season=r"([0-9]+|S)-"
 			episode=r"([0-9]+)"
-			marker = r".*(?:[0-9][0-9]|__) +"
+			marker = r".*(?:[0-9][0-9]|__|UNAIRED) +"
 			rest = r"(.*)"
 			a=re.match(prefix+r' +'+season+r' *'+episode+marker+rest,i)
 			if a:
