@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # coding=latin1
-# TV Renamer v2.22
+# TV Renamer v2.23
 # (C) Copyright 2007-2011 Perry Lorier
 #
 # Latest version can be downloaded from
@@ -252,7 +252,7 @@ def fetchpage(title):
 			prefix=r"^(?:.*\.|<li>|[0-9]+)"
 			season=r"([0-9]+|S)-"
 			episode=r"([0-9]+)"
-			marker = r".*(?:[0-9][0-9]|__|UNAIRED) +"
+			marker = r"[^<]*(?:[0-9][0-9]|__|UNAIRED) +"
 			rest = r"(.*)"
 			a=re.match(prefix+r' +'+season+r' *'+episode+marker+rest,i)
 			if a:
@@ -264,6 +264,7 @@ def fetchpage(title):
 				if not data.has_key(season):
 					data[season]={}
 				title=a.groups()[2]
+				debugmsg('Un cleaned title: %r', title)
 				if title.startswith("<a"):
 					b = re.match("<a[^>]*>([^<]+)</.*",title)
 					if b:
@@ -271,8 +272,7 @@ def fetchpage(title):
 					else:
 						print "failed to clean",repr(title)
 				data[season][ep]=unhtmlspecialchars(title)
-				if debug:
-					debugmsg("Found: S%02dE%02d: %r",season,ep,data[season][ep])
+				debugmsg("Found: S%02dE%02d: %r",season,ep,data[season][ep])
 			else:
 				if debug and i!="":
 					#print "DEBUG: Unmatched line",`i`
