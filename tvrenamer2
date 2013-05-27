@@ -64,6 +64,8 @@
 #  * Major refactor of the epguides name guessing code.
 # 2.23 (2011-06-29)
 #  * Deal with UNAIRED (Direct to dvd) shows
+# 2.24 (2013-05-27)
+#  * Set a user-agent for being polite.
 #
 # Config entries understood:
 #
@@ -220,14 +222,23 @@ def parse_config():
 	f.close()
 
 
+class TVRenamerURLopener(urllib.FancyURLopener):
+    version = "tvrenamer//2.23"
+
+urllib._urlopener = TVRenamerURLopener()
+
+pagecache = {}
+
 def fetchpage(title):
 	url='http://epguides.com/%s/' % title
 
 	debugmsg("Fetching %r",url)
 
 	epdisplaytitle = ""
-	a=urllib.urlopen(url)
-	f=[x.split('\r') for x in a.readlines()]
+	if url not in pagecache:
+		pagecache[url]=urllib.urlopen(url).readlines()
+	a = pagecache[url]
+	f=[x.split('\r') for x in a]
 	ff=reduce(lambda a,b:a+b,f)
 	flag=1
 	data={}
