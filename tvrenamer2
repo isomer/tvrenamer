@@ -66,6 +66,8 @@
 #  * Deal with UNAIRED (Direct to dvd) shows
 # 2.24 (2013-05-27)
 #  * Set a user-agent for being polite.
+#  * Don't cache "TBA" episodes, so we'll try and reverify them when they
+#    come around.
 #
 # Config entries understood:
 #
@@ -482,7 +484,6 @@ def find_series_name(series_name):
 	for name2 in suggestions:
 		debugmsg("Now trying %r",name2)
 		series_info[name2]=fetchpage(name2)
-		#series_info[name2]=None
 		series_loaded_this_session.append(name2)
 		if series_info[name2] is not None:
 			return name2
@@ -663,4 +664,21 @@ if __name__=="__main__":
 			continue
 		process_file(i,title,name)
 
+	# Strip TBA episodes before we save the cache, so when it comes time
+	# to rename them we'll try again and hopefully the name will be there
+	# by then.
+	for i in series_loaded_this_session:
+		data= series_info.get(i, (None,{}))
+		if data is None:
+			del series_info[i]
+			continue
+		else:
+			title, seasons = data
+		seasondata = {}
+		for seasonnum, season in seasons.items():
+			seasondata[seasonnum] = [(num,title) 
+					for (num, title) in season.items()
+					if title != 'TBA']
+		series_info[i] = title, seasondata
+				
 	save_cache(series_info)
