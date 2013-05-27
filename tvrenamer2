@@ -65,6 +65,7 @@
 # 2.23 (2011-06-29)
 #  * Deal with UNAIRED (Direct to dvd) shows
 # 2.24 (2013-05-27)
+#  * Guess "&" and "+" being "and" and "plus" in series names.
 #  * Set a user-agent for being polite.
 #  * Don't cache "TBA" episodes, so we'll try and reverify them when they
 #    come around.
@@ -432,17 +433,35 @@ def series_name_the(name):
 		if name.startswith(".") or name.startswith("_"):
 			name=name[1:]
 		yield name
+	if re.match(r"^an[^a-z]",name.lower()):
+		name=name[2:]
+		if name.startswith(".") or name.startswith("_"):
+			name=name[1:]
+		yield name
 	if name.lower().endswith(", the"):
 		yield name[:-5]
+
+def series_name_expansion(name):
+	"Try expanding words or punctuation"
+	yield name
+	yield name.replace('&',' and ')
+	yield name.replace('+',' plus ')
+
+def series_name_usuk(name):
+	if len(name)>3 and name[-2:].lower() in ['uk', 'us'] and name[-3]!='_':
+		yield name[:-2]+"_"+name[-2:]
+	yield name
 
 def series_name_suggestions(series_names):
 	"Given a series name, return a list of possible things to look for"
 	suggestors = [
+			series_name_expansion,
 			series_name_punctuation,
 			series_name_unescape,
 			series_name_year,
 			series_name_the,
 			series_name_prefixes,
+			series_name_usuk,
 			]
 	suggestions = series_names
 	newsuggestions = []
